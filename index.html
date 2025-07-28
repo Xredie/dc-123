@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Discord Webhook Tool</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #messageInput {
+      width: 300px;
+      height: 30px;
+      font-size: 16px;
+    }
+    #mentionSelect {
+      font-size: 16px;
+      height: 34px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Discord Webhook Tool</h2>
+
+  <button id="spamBtn">1. Włącz spam 250 wiadomości</button><br/>
+
+  <button id="addFakeBtn">2. Dodaj 10 fejkowych osób na serwer</button><br/>
+
+  <input type="text" id="messageInput" placeholder="Wpisz wiadomość do wysłania" />
+  <select id="mentionSelect">
+    <option value="">Bez oznaczenia</option>
+    <option value="@here">@here</option>
+    <option value="@everyone">@everyone</option>
+  </select>
+  <button id="sendMsgBtn">3. Wyślij wiadomość na wszystkich kanałach</button><br/>
+
+  <button disabled>4. (nieaktywne)</button><br/>
+  <button disabled>5. (nieaktywne)</button><br/>
+  <button disabled>6. (nieaktywne)</button><br/>
+
+<script>
+  const webhookUrl = "https://discord.com/api/webhooks/1399367091848614080/bxP6PSdN7CIA_8gOHI5lQ6HYOkFeyjcIoM1iLLuWSm_3qvRftBTkwT2L1hrHPeNZ9BBM";
+  const discordServerInvite = "https://discord.gg/6us73pym";
+
+  // 1. Spam 250 wiadomości (ta sama wiadomość)
+  document.getElementById("spamBtn").onclick = async () => {
+    const content = "Spam wiadomość od skryptu";
+    for (let i = 0; i < 250; i++) {
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+      } catch (e) {
+        console.error("Błąd wysyłania spamu", e);
+      }
+    }
+    alert("Wysłano 250 wiadomości spam");
+  };
+
+  // 2. Dodaj 10 fake osób (w rzeczywistości webhook może wysłać wiadomości jako fake user)
+  document.getElementById("addFakeBtn").onclick = async () => {
+    for (let i = 1; i <= 10; i++) {
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: `Fake user #${i} dołącza na serwer ${discordServerInvite}`,
+            username: `FakeUser${i}`,
+            avatar_url: "https://i.pravatar.cc/40?img=" + (i+10),
+          }),
+        });
+      } catch (e) {
+        console.error("Błąd przy dodawaniu fake usera", e);
+      }
+    }
+    alert("Dodano 10 fejkowych osób");
+  };
+
+  // 3. Wyślij wiadomość na wszystkich kanałach (w rzeczywistości wysyła na webhook)
+  document.getElementById("sendMsgBtn").onclick = async () => {
+    const message = document.getElementById("messageInput").value.trim();
+    if (!message) {
+      alert("Wpisz wiadomość do wysłania");
+      return;
+    }
+    const mention = document.getElementById("mentionSelect").value;
+    const content = (mention ? mention + " " : "") + message;
+
+    try {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      alert("Wysłano wiadomość na webhook");
+    } catch (e) {
+      console.error("Błąd wysyłania wiadomości", e);
+      alert("Błąd wysyłania wiadomości");
+    }
+  };
+</script>
+</body>
+</html>
