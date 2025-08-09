@@ -1,112 +1,86 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8" />
-  <title>Discord Webhook Tool</title>
-  <style>
+<meta charset="UTF-8">
+<title>Bot Test</title>
+<style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
+        background: #111;
+        color: #0f0;
+        font-family: monospace;
+        padding: 20px;
     }
     button {
-      margin: 5px;
-      padding: 10px 15px;
-      font-size: 16px;
-      cursor: pointer;
+        padding: 10px 20px;
+        margin-right: 10px;
+        background: #222;
+        color: #0f0;
+        border: 1px solid #0f0;
+        cursor: pointer;
     }
-    #messageInput {
-      width: 300px;
-      height: 30px;
-      font-size: 16px;
+    button:hover {
+        background: #333;
     }
-    #mentionSelect {
-      font-size: 16px;
-      height: 34px;
-    }
-  </style>
+</style>
 </head>
 <body>
-  <h2>Discord Webhook Tool</h2>
-
-  <button id="spamBtn">1. Włącz spam 250 wiadomości</button><br/>
-
-  <button id="addFakeBtn">2. Dodaj 10 fejkowych osób na serwer</button><br/>
-
-  <input type="text" id="messageInput" placeholder="Wpisz wiadomość do wysłania" />
-  <select id="mentionSelect">
-    <option value="">Bez oznaczenia</option>
-    <option value="@here">@here</option>
-    <option value="@everyone">@everyone</option>
-  </select>
-  <button id="sendMsgBtn">3. Wyślij wiadomość na wszystkich kanałach</button><br/>
-
-  <button disabled>4. (nieaktywne)</button><br/>
-  <button disabled>5. (nieaktywne)</button><br/>
-  <button disabled>6. (nieaktywne)</button><br/>
+<h1>Symulator botów</h1>
+<p>Symuluje wejścia botów na stronę.</p>
+<button id="startBots">Start boty</button>
+<button id="stopBots">Stop boty</button>
 
 <script>
-  const webhookUrl = "https://discord.com/api/webhooks/1399367091848614080/bxP6PSdN7CIA_8gOHI5lQ6HYOkFeyjcIoM1iLLuWSm_3qvRftBTkwT2L1hrHPeNZ9BBM";
-  const discordServerInvite = "https://discord.gg/6us73pym";
+const url = "https://vectaria.io"; // tu wstaw adres testowy
+const visitsPerSecond = 2000; // ile botów na sekundę
+const delay = 1000 / visitsPerSecond;
+let intervalId = null;
+let botCounter = 0;
 
-  // 1. Spam 250 wiadomości (ta sama wiadomość)
-  document.getElementById("spamBtn").onclick = async () => {
-    const content = "Spam wiadomość od skryptu";
-    for (let i = 0; i < 250; i++) {
-      try {
-        await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
-        });
-      } catch (e) {
-        console.error("Błąd wysyłania spamu", e);
-      }
-    }
-    alert("Wysłano 250 wiadomości spam");
-  };
+const userAgents = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 7 Pro) Chrome/120.0.0.0 Mobile",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) Firefox/120.0",
+    "Mozilla/5.0 (Windows NT 6.1; Win64; x64) Edge/120.0.0.0",
+    "Mozilla/5.0 (iPad; CPU OS 17_1 like Mac OS X) Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 12; SM-G998B) Chrome/118.0.5993.119 Mobile",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_6) Firefox/119.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Vivaldi/6.5"
+];
 
-  // 2. Dodaj 10 fake osób (w rzeczywistości webhook może wysłać wiadomości jako fake user)
-  document.getElementById("addFakeBtn").onclick = async () => {
-    for (let i = 1; i <= 10; i++) {
-      try {
-        await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: `Fake user #${i} dołącza na serwer ${discordServerInvite}`,
-            username: `FakeUser${i}`,
-            avatar_url: "https://i.pravatar.cc/40?img=" + (i+10),
-          }),
-        });
-      } catch (e) {
-        console.error("Błąd przy dodawaniu fake usera", e);
-      }
-    }
-    alert("Dodano 10 fejkowych osób");
-  };
+document.getElementById("startBots").onclick = () => {
+    if (!intervalId) {
+        intervalId = setInterval(() => {
+            botCounter++;
+            let botId = botCounter;
+            let randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
+            
+            console.log(`[Bot #${botId}] Łączę się jako: ${randomUA}`);
+            
+            let iframe = document.createElement("iframe");
+            iframe.src = url + "?ua=" + encodeURIComponent(randomUA) + "&t=" + Date.now();
+            iframe.style.width = "1px";
+            iframe.style.height = "1px";
+            iframe.style.position = "absolute";
+            iframe.style.left = "-9999px";
+            document.body.appendChild(iframe);
 
-  // 3. Wyślij wiadomość na wszystkich kanałach (w rzeczywistości wysyła na webhook)
-  document.getElementById("sendMsgBtn").onclick = async () => {
-    const message = document.getElementById("messageInput").value.trim();
-    if (!message) {
-      alert("Wpisz wiadomość do wysłania");
-      return;
-    }
-    const mention = document.getElementById("mentionSelect").value;
-    const content = (mention ? mention + " " : "") + message;
+            iframe.onload = () => {
+                console.log(`[Bot #${botId}] Wszedł na stronę: ${url}`);
+            };
 
-    try {
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
-      alert("Wysłano wiadomość na webhook");
-    } catch (e) {
-      console.error("Błąd wysyłania wiadomości", e);
-      alert("Błąd wysyłania wiadomości");
+            setTimeout(() => iframe.remove(), 3000);
+        }, delay);
     }
-  };
+};
+
+document.getElementById("stopBots").onclick = () => {
+    clearInterval(intervalId);
+    intervalId = null;
+    console.log("Boty zatrzymane.");
+};
 </script>
 </body>
-</html>
+<
+  /html>
