@@ -1,86 +1,135 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-<meta charset="UTF-8">
-<title>Bot Test</title>
+<meta charset="UTF-8" />
+<title>Bot Test z anty-botem i polem URL</title>
 <style>
-    body {
-        background: #111;
-        color: #0f0;
-        font-family: monospace;
-        padding: 20px;
-    }
-    button {
-        padding: 10px 20px;
-        margin-right: 10px;
-        background: #222;
-        color: #0f0;
-        border: 1px solid #0f0;
-        cursor: pointer;
-    }
-    button:hover {
-        background: #333;
-    }
+  body { font-family: monospace; background:#111; color:#0f0; padding:20px; }
+  #antibot, #botPanel { max-width: 400px; margin: auto; padding:20px; border: 1px solid #0f0; border-radius:8px; }
+  button, input[type="text"] { 
+    padding:10px 20px; 
+    margin:5px 0; 
+    background:#222; 
+    color:#0f0; 
+    border:1px solid #0f0; 
+    cursor:pointer; 
+    font-family: monospace;
+    font-size: 16px;
+  }
+  button:hover { background:#333; }
+  input[type="text"] { width: 100%; box-sizing: border-box; }
 </style>
 </head>
 <body>
-<h1>Symulator botów</h1>
-<p>Symuluje wejścia botów na stronę.</p>
-<button id="startBots">Start boty</button>
-<button id="stopBots">Stop boty</button>
+
+<div id="antibot">
+  <h2>Potwierdź, że nie jesteś botem</h2>
+  <p>Proszę kliknij poniższy przycisk i porusz myszką przez sekundę.</p>
+  <button id="verifyBtn">Kliknij mnie</button>
+  <p id="status">Status: oczekiwanie...</p>
+</div>
+
+<div id="botPanel" style="display:none;">
+  <h2>Panel Botów</h2>
+  <label for="urlInput">Adres strony do testu:</label>
+  <input type="text" id="urlInput" value="https://twoja-strona.pl" />
+  <button id="startBots">Start boty</button>
+  <button id="stopBots">Stop boty</button>
+</div>
 
 <script>
-const url = "https://vectaria.io"; // tu wstaw adres testowy
-const visitsPerSecond = 2000; // ile botów na sekundę
-const delay = 1000 / visitsPerSecond;
-let intervalId = null;
-let botCounter = 0;
+(() => {
+  const antibotDiv = document.getElementById('antibot');
+  const botPanel = document.getElementById('botPanel');
+  const verifyBtn = document.getElementById('verifyBtn');
+  const status = document.getElementById('status');
+  const urlInput = document.getElementById('urlInput');
 
-const userAgents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 14; Pixel 7 Pro) Chrome/120.0.0.0 Mobile",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) Firefox/120.0",
-    "Mozilla/5.0 (Windows NT 6.1; Win64; x64) Edge/120.0.0.0",
-    "Mozilla/5.0 (iPad; CPU OS 17_1 like Mac OS X) Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 12; SM-G998B) Chrome/118.0.5993.119 Mobile",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_6) Firefox/119.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Vivaldi/6.5"
-];
+  let mouseMoved = false;
+  let moveTimeout;
 
-document.getElementById("startBots").onclick = () => {
-    if (!intervalId) {
-        intervalId = setInterval(() => {
-            botCounter++;
-            let botId = botCounter;
-            let randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
-            
-            console.log(`[Bot #${botId}] Łączę się jako: ${randomUA}`);
-            
-            let iframe = document.createElement("iframe");
-            iframe.src = url + "?ua=" + encodeURIComponent(randomUA) + "&t=" + Date.now();
-            iframe.style.width = "1px";
-            iframe.style.height = "1px";
-            iframe.style.position = "absolute";
-            iframe.style.left = "-9999px";
-            document.body.appendChild(iframe);
+  verifyBtn.onclick = () => {
+    status.textContent = 'Proszę porusz myszką przez 1 sekundę...';
+    mouseMoved = false;
 
-            iframe.onload = () => {
-                console.log(`[Bot #${botId}] Wszedł na stronę: ${url}`);
-            };
-
-            setTimeout(() => iframe.remove(), 3000);
-        }, delay);
+    function onMouseMove() {
+      mouseMoved = true;
+      clearTimeout(moveTimeout);
+      moveTimeout = setTimeout(() => {
+        if (mouseMoved) {
+          status.textContent = 'Weryfikacja zakończona pomyślnie! Możesz uruchomić boty.';
+          antibotDiv.style.display = 'none';
+          botPanel.style.display = 'block';
+          window.removeEventListener('mousemove', onMouseMove);
+        } else {
+          status.textContent = 'Nie wykryto ruchu myszy. Spróbuj ponownie.';
+        }
+      }, 1000);
     }
-};
 
-document.getElementById("stopBots").onclick = () => {
+    window.addEventListener('mousemove', onMouseMove);
+  };
+
+  // Boty
+  const visitsPerSecond = 2000; // zmniejsz jeśli laguje
+  const delay = 1000 / visitsPerSecond;
+  let intervalId = null;
+  let botCounter = 0;
+
+  const userAgents = [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) Safari/604.1",
+      "Mozilla/5.0 (Linux; Android 14; Pixel 7 Pro) Chrome/120.0.0.0 Mobile",
+      "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) Firefox/120.0",
+      "Mozilla/5.0 (Windows NT 6.1; Win64; x64) Edge/120.0.0.0",
+      "Mozilla/5.0 (iPad; CPU OS 17_1 like Mac OS X) Safari/604.1",
+      "Mozilla/5.0 (Linux; Android 12; SM-G998B) Chrome/118.0.5993.119 Mobile",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_6) Firefox/119.0",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Vivaldi/6.5"
+  ];
+
+  document.getElementById('startBots').onclick = () => {
+    if (!intervalId) {
+      intervalId = setInterval(() => {
+        botCounter++;
+        let botId = botCounter;
+        let randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
+        let url = urlInput.value.trim();
+        if (!url) {
+          console.warn('Nie podano adresu strony!');
+          return;
+        }
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          url = 'http://' + url;
+        }
+
+        console.log(`[Bot #${botId}] Łączę się jako: ${randomUA}`);
+
+        let iframe = document.createElement("iframe");
+        iframe.src = url + "?ua=" + encodeURIComponent(randomUA) + "&t=" + Date.now();
+        iframe.style.width = "1px";
+        iframe.style.height = "1px";
+        iframe.style.position = "absolute";
+        iframe.style.left = "-9999px";
+        document.body.appendChild(iframe);
+
+        iframe.onload = () => {
+          console.log(`[Bot #${botId}] Wszedł na stronę: ${url}`);
+        };
+
+        setTimeout(() => iframe.remove(), 2000);
+      }, delay);
+    }
+  };
+
+  document.getElementById('stopBots').onclick = () => {
     clearInterval(intervalId);
     intervalId = null;
     console.log("Boty zatrzymane.");
-};
+  };
+})();
 </script>
+
 </body>
-<
-  /html>
+</html>
