@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8" />
-<title>Bot Panel z wysyłką pełnych logów na Discord</title>
+<title>Bot Panel z wysyłką logów na Discord</title>
 <style>
   body { font-family: monospace; background:#111; color:#0f0; padding:20px; }
   #mainPanel { max-width: 600px; margin: auto; padding:20px; border: 1px solid #0f0; border-radius:8px; }
@@ -124,19 +124,6 @@ Korzystając z tego narzędzia oświadczasz, że:
   nickInput.addEventListener('input', updateStartBtn);
   acceptCheckbox.addEventListener('change', updateStartBtn);
 
-  // Funkcja dzieli długi tekst na kawałki max długości chunkSize
-  async function sendLargeMessage(content, prefix = '') {
-    const chunkSize = 1900; // Discord limit - zostawiamy miejsce na formatowanie
-    for(let i = 0; i < content.length; i += chunkSize) {
-      const chunk = content.slice(i, i + chunkSize);
-      await fetch(webhookURL, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ content: `${prefix}\`\`\`\n${chunk}\n\`\`\`` })
-      });
-    }
-  }
-
   startBtn.onclick = async () => {
     if (intervalId) return;
     if (!acceptCheckbox.checked) {
@@ -242,14 +229,42 @@ Błędów: ${errorCount}
 
     const jsonContent = JSON.stringify(logData, null, 2);
 
-    // Wyślij pełne logi JSON (może być duże, więc dzielimy)
-    await sendLargeMessage(jsonContent, "**Logi:**\n```json\n");
+    // Wyślij logi jako 2 wiadomości na Discord webhook
+    await fetch(webhookURL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ content: "**Logi:**\n```json\n" + jsonContent.slice(0, 1900) + "\n```" })
+    });
 
-    // Wyślij pełne podsumowanie TXT z logami (również dzielone)
-    await sendLargeMessage(fullTxt, "**Dane:**\n```txt\n");
+    await fetch(webhookURL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ content: "**Dane:**\n```txt\n" + fullTxt.slice(0, 1900) + "\n```" })
+    });
 
     startBtn.disabled = false;
     stopBtn.disabled = true;
     nickInput.disabled = false;
     urlInput.disabled = false;
-    acceptCheckbox.disabled
+    acceptCheckbox.disabled = false;
+  };
+
+  window.addEventListener('load', async () => {
+    try {
+      const res = await fetch("https://api.ipify.org?format=json");
+      const data = await res.json();
+      userIP = data.ip;
+      log(`Twój IP to: ${userIP}`);
+    } catch(e) {
+      log("Nie udało się pobrać IP");
+    }
+  });
+
+  updateStartBtn();
+  nickInput.addEventListener('input', updateStartBtn);
+  acceptCheckbox.addEventListener('change', updateStartBtn);
+})();
+</script>
+
+</body>
+</html>
